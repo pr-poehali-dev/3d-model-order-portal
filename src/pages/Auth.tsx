@@ -1,9 +1,11 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
+import { login, register } from "@/lib/api";
 
 type Page = "catalog" | "cart" | "orders" | "profile" | "delivery" | "reviews" | "support" | "admin" | "auth";
 
 interface User {
+  id: number;
   name: string;
   email: string;
   role: "client" | "admin";
@@ -22,26 +24,15 @@ export default function Auth({ onNavigate, onLogin }: Props) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-
-    setTimeout(() => {
-      setLoading(false);
+    try {
       if (mode === "login") {
-        // Demo: admin login
-        if (form.email === "admin@form3d.ru" && form.password === "admin123") {
-          onLogin({ name: "Администратор", email: form.email, role: "admin" });
-          onNavigate("admin");
-          return;
-        }
-        if (form.email && form.password) {
-          onLogin({ name: form.email.split("@")[0], email: form.email, role: "client" });
-          onNavigate("catalog");
-        } else {
-          setError("Введите email и пароль");
-        }
+        const user = await login(form.email, form.password);
+        onLogin(user);
+        onNavigate(user.role === "admin" ? "admin" : "catalog");
       } else {
         if (!form.name || !form.email || !form.password) {
           setError("Заполните все поля");
@@ -51,16 +42,20 @@ export default function Auth({ onNavigate, onLogin }: Props) {
           setError("Пароли не совпадают");
           return;
         }
-        onLogin({ name: form.name, email: form.email, role: "client" });
+        const user = await register(form.name, form.email, form.password);
+        onLogin(user);
         onNavigate("catalog");
       }
-    }, 800);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-[calc(100vh-56px)] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md animate-fade-in">
-        {/* Logo area */}
         <div className="text-center mb-10">
           <div className="w-12 h-12 bg-gold flex items-center justify-center mx-auto mb-4">
             <span className="font-display font-bold text-background text-lg">3D</span>
@@ -69,17 +64,14 @@ export default function Auth({ onNavigate, onLogin }: Props) {
             {mode === "login" ? "Добро пожаловать" : "Создать аккаунт"}
           </h1>
           <p className="font-body text-xs text-muted-foreground tracking-wider">
-            {mode === "login"
-              ? "Войдите в личный кабинет ФОРМ3Д"
-              : "Зарегистрируйтесь для доступа к каталогу"}
+            {mode === "login" ? "Войдите в личный кабинет Reufer Studio" : "Зарегистрируйтесь для доступа к каталогу"}
           </p>
         </div>
 
-        {/* Demo hint */}
         {mode === "login" && (
           <div className="mb-6 p-3 border border-gold/30 bg-gold/5">
             <p className="font-body text-xs text-muted-foreground tracking-wider">
-              <span className="text-gold">Демо администратора:</span> admin@form3d.ru / admin123
+              <span className="text-gold">Демо администратора:</span> admin@reufer.studio / admin123
             </p>
           </div>
         )}
@@ -140,11 +132,7 @@ export default function Auth({ onNavigate, onLogin }: Props) {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full btn-gold flex items-center justify-center gap-2 py-3 mt-2"
-          >
+          <button type="submit" disabled={loading} className="w-full btn-gold flex items-center justify-center gap-2 py-3 mt-2">
             {loading && <Icon name="Loader2" size={14} className="animate-spin" />}
             {mode === "login" ? "Войти" : "Зарегистрироваться"}
           </button>
@@ -158,14 +146,6 @@ export default function Auth({ onNavigate, onLogin }: Props) {
             {mode === "login" ? "Нет аккаунта? Зарегистрироваться" : "Уже есть аккаунт? Войти"}
           </button>
         </div>
-
-        {mode === "login" && (
-          <div className="mt-3 text-center">
-            <button className="font-body text-xs text-muted-foreground/60 hover:text-gold transition-colors tracking-wider">
-              Забыли пароль?
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

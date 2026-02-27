@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Catalog from "@/pages/Catalog";
+import type { CartItem } from "@/pages/Catalog";
 import Cart from "@/pages/Cart";
 import Orders from "@/pages/Orders";
 import Profile from "@/pages/Profile";
@@ -13,6 +14,7 @@ import Icon from "@/components/ui/icon";
 type Page = "catalog" | "cart" | "orders" | "profile" | "delivery" | "reviews" | "support" | "admin" | "auth";
 
 interface User {
+  id: number;
   name: string;
   email: string;
   role: "client" | "admin";
@@ -20,7 +22,7 @@ interface User {
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>("catalog");
-  const [cartCount, setCartCount] = useState(0);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -38,24 +40,33 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const handleAddToCart = (item: CartItem) => {
+    setCartItems(prev => {
+      const existing = prev.find(i => i.id === item.id);
+      if (existing) return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
+      return [...prev, item];
+    });
+  };
+
+  const cartCount = cartItems.reduce((sum, i) => sum + i.qty, 0);
+
   const renderPage = () => {
     switch (currentPage) {
-      case "catalog": return <Catalog onNavigate={navigate} onAddToCart={() => setCartCount(c => c + 1)} />;
-      case "cart": return <Cart onNavigate={navigate} cartCount={cartCount} setCartCount={setCartCount} />;
-      case "orders": return <Orders onNavigate={navigate} />;
+      case "catalog": return <Catalog onNavigate={navigate} onAddToCart={handleAddToCart} />;
+      case "cart": return <Cart onNavigate={navigate} cartItems={cartItems} setCartItems={setCartItems} user={user} />;
+      case "orders": return <Orders onNavigate={navigate} userId={user?.id} />;
       case "profile": return <Profile user={user} onNavigate={navigate} onLogout={() => { setUser(null); navigate("catalog"); }} />;
       case "delivery": return <Delivery onNavigate={navigate} />;
-      case "reviews": return <Reviews onNavigate={navigate} />;
+      case "reviews": return <Reviews onNavigate={navigate} userId={user?.id} />;
       case "support": return <Support onNavigate={navigate} />;
-      case "admin": return user?.role === "admin" ? <Admin onNavigate={navigate} /> : <Catalog onNavigate={navigate} onAddToCart={() => setCartCount(c => c + 1)} />;
+      case "admin": return user?.role === "admin" ? <Admin onNavigate={navigate} /> : <Catalog onNavigate={navigate} onAddToCart={handleAddToCart} />;
       case "auth": return <Auth onNavigate={navigate} onLogin={(u: User) => setUser(u)} />;
-      default: return <Catalog onNavigate={navigate} onAddToCart={() => setCartCount(c => c + 1)} />;
+      default: return <Catalog onNavigate={navigate} onAddToCart={handleAddToCart} />;
     }
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-14">
@@ -64,7 +75,7 @@ export default function App() {
                 <span className="text-background font-display font-bold text-xs">3D</span>
               </div>
               <span className="font-display text-lg tracking-widest uppercase">
-                ФОРМ<span className="text-gold">3Д</span>
+                Reufer <span className="text-gold">Studio</span>
               </span>
             </button>
 
@@ -172,9 +183,9 @@ export default function App() {
             <div className="w-5 h-5 bg-gold flex items-center justify-center">
               <span className="text-background font-display font-bold text-[9px]">3D</span>
             </div>
-            <span className="font-display text-sm tracking-widest uppercase">ФОРМ<span className="text-gold">3Д</span></span>
+            <span className="font-display text-sm tracking-widest uppercase">Reufer <span className="text-gold">Studio</span></span>
           </div>
-          <p className="font-body text-xs text-muted-foreground tracking-wider">© 2026 ФОРМ3Д. Все права защищены.</p>
+          <p className="font-body text-xs text-muted-foreground tracking-wider">© 2026 Reufer Studio. Все права защищены.</p>
           <div className="flex items-center gap-4">
             <button className="font-body text-xs text-muted-foreground hover:text-gold transition-colors tracking-wider">Политика</button>
             <button className="font-body text-xs text-muted-foreground hover:text-gold transition-colors tracking-wider">Оферта</button>

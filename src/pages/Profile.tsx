@@ -4,6 +4,7 @@ import Icon from "@/components/ui/icon";
 type Page = "catalog" | "cart" | "orders" | "profile" | "delivery" | "reviews" | "support" | "admin" | "auth";
 
 interface User {
+  id: number;
   name: string;
   email: string;
   role: "client" | "admin";
@@ -55,7 +56,7 @@ export default function Profile({ user, onNavigate, onLogout }: Props) {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
       <div className="mb-8">
-        <p className="font-body text-xs tracking-[0.3em] uppercase text-gold mb-2">Личный кабинет</p>
+        <p className="font-body text-xs tracking-[0.3em] uppercase text-gold mb-2">Reufer Studio</p>
         <h1 className="font-display text-4xl">Профиль</h1>
         <div className="gold-line w-24 mt-3" />
       </div>

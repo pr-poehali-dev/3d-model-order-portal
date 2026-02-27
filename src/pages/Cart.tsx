@@ -1,15 +1,10 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
+import { createOrder } from "@/lib/api";
 
 type Page = "catalog" | "cart" | "orders" | "profile" | "delivery" | "reviews" | "support" | "admin" | "auth";
 
-interface Props {
-  onNavigate: (page: Page) => void;
-  cartCount: number;
-  setCartCount: (n: number | ((prev: number) => number)) => void;
-}
-
-interface CartItem {
+export interface CartItem {
   id: number;
   name: string;
   category: string;
@@ -19,10 +14,12 @@ interface CartItem {
   color: string;
 }
 
-const initialItems: CartItem[] = [
-  { id: 1, name: "Архитектурный фасад", category: "Архитектура", price: 12500, format: "STL / OBJ", qty: 1, color: "#C4A35A" },
-  { id: 3, name: "Ювелирное кольцо", category: "Ювелирные", price: 5400, format: "STL / 3DM", qty: 2, color: "#E8C97A" },
-];
+interface Props {
+  onNavigate: (page: Page) => void;
+  cartItems: CartItem[];
+  setCartItems: (items: CartItem[] | ((prev: CartItem[]) => CartItem[])) => void;
+  user: { id: number; name: string; email: string } | null;
+}
 
 const deliveryOptions = [
   { id: "cdek", name: "СДЭК", price: 350, days: "2–5 дней", icon: "Truck" },
@@ -31,34 +28,56 @@ const deliveryOptions = [
   { id: "ozon", name: "OZON Rocket", price: 220, days: "1–3 дня", icon: "Zap" },
 ];
 
-export default function Cart({ onNavigate, setCartCount }: Props) {
-  const [items, setItems] = useState<CartItem[]>(initialItems);
+export default function Cart({ onNavigate, cartItems, setCartItems, user }: Props) {
   const [selectedDelivery, setSelectedDelivery] = useState("cdek");
   const [orderPlaced, setOrderPlaced] = useState(false);
+  const [orderNumber, setOrderNumber] = useState("");
   const [promoCode, setPromoCode] = useState("");
   const [promoApplied, setPromoApplied] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+  const subtotal = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0);
   const delivery = deliveryOptions.find(d => d.id === selectedDelivery)!;
   const discount = promoApplied ? Math.round(subtotal * 0.1) : 0;
   const total = subtotal + delivery.price - discount;
 
   const updateQty = (id: number, delta: number) => {
-    setItems(prev => prev.map(i => i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i));
+    setCartItems(prev =>
+      (prev as CartItem[]).map(i => i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i)
+    );
   };
 
   const removeItem = (id: number) => {
-    setItems(prev => prev.filter(i => i.id !== id));
-    setCartCount((c: number) => Math.max(0, c - 1));
+    setCartItems((prev: CartItem[]) => prev.filter(i => i.id !== id));
   };
 
-  const handlePromo = () => {
-    if (promoCode.toUpperCase() === "FORM3D10") setPromoApplied(true);
-  };
-
-  const handleOrder = () => {
-    setOrderPlaced(true);
-    setCartCount(0);
+  const handleOrder = async () => {
+    setLoading(true);
+    try {
+      const result = await createOrder({
+        user_id: user?.id,
+        client_name: user?.name || "Гость",
+        client_email: user?.email || "",
+        delivery_service: delivery.name,
+        delivery_price: delivery.price,
+        subtotal,
+        total,
+        promo_discount: discount,
+        items: cartItems.map(i => ({
+          product_id: i.id,
+          name: i.name,
+          qty: i.qty,
+          price: i.price,
+        })),
+      });
+      setOrderNumber(result.order_number);
+      setOrderPlaced(true);
+      setCartItems([]);
+    } catch (e) {
+      alert("Ошибка при оформлении заказа");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (orderPlaced) {
@@ -68,8 +87,8 @@ export default function Cart({ onNavigate, setCartCount }: Props) {
           <Icon name="CheckCircle" size={32} className="text-gold" />
         </div>
         <h2 className="font-display text-3xl mb-3">Заказ оформлен!</h2>
-        <p className="font-body text-sm text-muted-foreground mb-2">Номер заказа: <span className="text-gold font-medium">#ФМ-{Date.now().toString().slice(-6)}</span></p>
-        <p className="font-body text-xs text-muted-foreground mb-8 tracking-wider">Мы свяжемся с вами в течение 30 минут для подтверждения</p>
+        <p className="font-body text-sm text-muted-foreground mb-2">Номер заказа: <span className="text-gold font-medium">{orderNumber}</span></p>
+        <p className="font-body text-xs text-muted-foreground mb-8 tracking-wider">Мы свяжемся с вами в течение 30 минут</p>
         <div className="flex gap-3 justify-center">
           <button onClick={() => onNavigate("orders")} className="btn-gold">Мои заказы</button>
           <button onClick={() => onNavigate("catalog")} className="btn-outline-gold">Каталог</button>
@@ -78,7 +97,7 @@ export default function Cart({ onNavigate, setCartCount }: Props) {
     );
   }
 
-  if (items.length === 0) {
+  if (cartItems.length === 0) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-20 text-center animate-fade-in">
         <Icon name="ShoppingCart" size={48} className="text-muted-foreground/30 mx-auto mb-4" />
@@ -91,15 +110,14 @@ export default function Cart({ onNavigate, setCartCount }: Props) {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
       <div className="mb-8">
-        <p className="font-body text-xs tracking-[0.3em] uppercase text-gold mb-2">Корзина</p>
+        <p className="font-body text-xs tracking-[0.3em] uppercase text-gold mb-2">Reufer Studio</p>
         <h1 className="font-display text-4xl">Ваш заказ</h1>
         <div className="gold-line w-24 mt-3" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Items */}
         <div className="lg:col-span-2 space-y-3">
-          {items.map((item) => (
+          {cartItems.map((item) => (
             <div key={item.id} className="surface-card p-4 flex items-start gap-4 animate-fade-in">
               <div
                 className="w-16 h-16 flex-shrink-0 flex items-center justify-center border"
@@ -142,9 +160,7 @@ export default function Cart({ onNavigate, setCartCount }: Props) {
                   key={opt.id}
                   onClick={() => setSelectedDelivery(opt.id)}
                   className={`flex items-start gap-3 p-3 border text-left transition-all ${
-                    selectedDelivery === opt.id
-                      ? "border-gold bg-gold/5"
-                      : "border-border hover:border-gold/40"
+                    selectedDelivery === opt.id ? "border-gold bg-gold/5" : "border-border hover:border-gold/40"
                   }`}
                 >
                   <Icon name={opt.icon as "Truck"} size={18} className={selectedDelivery === opt.id ? "text-gold" : "text-muted-foreground"} />
@@ -185,7 +201,6 @@ export default function Cart({ onNavigate, setCartCount }: Props) {
               <span className="font-display text-2xl text-gold">{total.toLocaleString()} ₽</span>
             </div>
 
-            {/* Promo */}
             {!promoApplied && (
               <div className="flex gap-2 mb-4">
                 <input
@@ -194,7 +209,12 @@ export default function Cart({ onNavigate, setCartCount }: Props) {
                   placeholder="Промокод"
                   className="flex-1 bg-muted border border-border px-3 py-2 font-body text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-gold"
                 />
-                <button onClick={handlePromo} className="btn-outline-gold px-3 py-2 text-xs">ОК</button>
+                <button
+                  onClick={() => { if (promoCode.toUpperCase() === "REUFER10") setPromoApplied(true); }}
+                  className="btn-outline-gold px-3 py-2 text-xs"
+                >
+                  ОК
+                </button>
               </div>
             )}
             {promoApplied && (
@@ -203,12 +223,13 @@ export default function Cart({ onNavigate, setCartCount }: Props) {
               </div>
             )}
 
-            <button onClick={handleOrder} className="btn-gold w-full py-3 flex items-center justify-center gap-2">
+            <button onClick={handleOrder} disabled={loading} className="btn-gold w-full py-3 flex items-center justify-center gap-2">
+              {loading && <Icon name="Loader2" size={15} className="animate-spin" />}
               <Icon name="CreditCard" size={15} />
               Оформить заказ
             </button>
             <p className="font-body text-[10px] text-muted-foreground text-center mt-2 tracking-wider">
-              Попробуй промокод FORM3D10 для скидки 10%
+              Промокод REUFER10 — скидка 10%
             </p>
           </div>
 
@@ -217,7 +238,7 @@ export default function Cart({ onNavigate, setCartCount }: Props) {
               <Icon name="Shield" size={18} className="text-gold flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-body text-xs font-medium mb-1">Гарантия качества</div>
-                <div className="font-body text-xs text-muted-foreground leading-relaxed">Возврат средств в течение 14 дней, если результат не соответствует заданию</div>
+                <div className="font-body text-xs text-muted-foreground leading-relaxed">Возврат средств в течение 14 дней</div>
               </div>
             </div>
           </div>
